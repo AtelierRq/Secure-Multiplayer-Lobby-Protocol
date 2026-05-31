@@ -16,11 +16,20 @@ MessageType get_message_type(const char *msg)
     if (strncmp(msg, "CREATE_LOBBY|", 13) == 0)
         return MSG_CREATE_LOBBY;
 
+    if (strncmp(msg, "LOBBY_CREATED|", 14) == 0)
+        return MSG_LOBBY_CREATED;
+
     if (strncmp(msg, "JOIN|", 5) == 0)
         return MSG_JOIN;
 
+    if (strncmp(msg, "JOIN_OK|", 8) == 0)
+        return MSG_JOIN_OK;
+
     if (strncmp(msg, "LEAVE", 5) == 0)
         return MSG_LEAVE;
+
+    if (strncmp(msg, "LEAVE_OK", 8) == 0)
+        return MSG_LEAVE_OK;
 
     if (strncmp(msg, "CHAT|", 5) == 0)
         return MSG_CHAT;

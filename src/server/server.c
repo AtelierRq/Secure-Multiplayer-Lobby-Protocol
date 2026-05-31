@@ -15,10 +15,13 @@
 // #pragma comment(lib, "ws2_32.lib")
 
 Client clients[MAX_CLIENTS];
+Lobby lobbies[MAX_LOBBIES];
 
 CRITICAL_SECTION clients_mutex;
+CRITICAL_SECTION lobbies_mutex;
 
 static int next_client_id = 1;
+static int next_lobby_id = 1;
 
 /* -------------------------------------------------- */
 /* TLS                                                */
@@ -211,6 +214,27 @@ void handle_login(Client *client, char *message)
 
     client->state = STATE_AUTHENTICATED;
 
+    EnterCriticalSection(&clients_mutex);
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == client->id)
+        {
+            strcpy(clients[i].nickname,
+                client->nickname);
+
+            strcpy(clients[i].token,
+                client->token);
+
+            clients[i].state =
+                STATE_AUTHENTICATED;
+
+            break;
+        }
+    }
+
+    LeaveCriticalSection(&clients_mutex);
+
     printf(
         "[INFO] User logged in: %s\n",
         client->nickname);
@@ -227,6 +251,200 @@ void handle_login(Client *client, char *message)
         client->ssl,
         response,
         (int)strlen(response));
+}
+
+/* -------------------------------------------------- */
+/* LOBBY                                     */
+/* -------------------------------------------------- */
+
+int create_lobby(const char *name, int host_id)
+{
+    int i;
+
+    EnterCriticalSection(&lobbies_mutex);
+
+    for(i = 0; i < MAX_LOBBIES; i++)
+    {
+        if(!lobbies[i].active)
+        {
+            lobbies[i].id = next_lobby_id++;
+            lobbies[i].active = 1;
+
+            strcpy(lobbies[i].name, name);
+
+            lobbies[i].host_id = host_id;
+
+            lobbies[i].player_count = 1;
+
+            LeaveCriticalSection(&lobbies_mutex);
+
+            return lobbies[i].id;
+        }
+    }
+
+    LeaveCriticalSection(&lobbies_mutex);
+
+    return -1;
+}
+
+int find_lobby(const char *name)
+{
+    int i;
+
+    for(i = 0; i < MAX_LOBBIES; i++)
+    {
+        if(!lobbies[i].active)
+            continue;
+
+        if(strcmp(lobbies[i].name, name) == 0)
+            return i;
+    }
+
+    return -1;
+}
+
+void handle_create_lobby(Client *client, char *message)
+{
+    char lobby_name[MAX_LOBBY_NAME];
+
+    if(sscanf(message,
+              "CREATE_LOBBY|%63s",
+              lobby_name) != 1)
+    {
+        SSL_write(client->ssl,
+                  "ERROR|Invalid lobby name",
+                  24);
+        return;
+    }
+
+    if(client->state != STATE_AUTHENTICATED)
+    {
+        SSL_write(client->ssl,
+                  "ERROR|Login required",
+                  20);
+        return;
+    }
+
+    int lobby_id =
+        create_lobby(lobby_name,
+                     client->id);
+
+    if(lobby_id < 0)
+    {
+        SSL_write(client->ssl,
+                  "ERROR|Cannot create lobby",
+                  25);
+        return;
+    }
+
+    client->lobby_id = lobby_id;
+    client->state = STATE_IN_LOBBY;
+
+    char response[MAX_MSG_LEN];
+
+    snprintf(response,
+             sizeof(response),
+             "LOBBY_CREATED|%d",
+             lobby_id);
+
+    SSL_write(client->ssl,
+              response,
+              (int)strlen(response));
+
+    printf("[LOBBY] %s created lobby %s\n",
+           client->nickname,
+           lobby_name);
+}
+
+void handle_join(Client *client,
+                 char *message)
+{
+    char lobby_name[MAX_LOBBY_NAME];
+
+    if(sscanf(message,
+              "JOIN|%63s",
+              lobby_name) != 1)
+    {
+        SSL_write(client->ssl,
+                  "ERROR|Invalid join",
+                  18);
+        return;
+    }
+
+    int idx = find_lobby(lobby_name);
+
+    if(idx < 0)
+    {
+        SSL_write(client->ssl,
+                  "ERROR|Lobby not found",
+                  21);
+        return;
+    }
+
+    lobbies[idx].player_count++;
+
+    client->lobby_id =
+        lobbies[idx].id;
+
+    client->state =
+        STATE_IN_LOBBY;
+
+    char response[MAX_MSG_LEN];
+
+    snprintf(response,
+             sizeof(response),
+             "JOIN_OK|%s",
+             lobby_name);
+
+    SSL_write(client->ssl,
+              response,
+              (int)strlen(response));
+
+    printf("[LOBBY] %s joined %s\n",
+           client->nickname,
+           lobby_name);
+}
+
+void handle_leave(Client *client)
+{
+    if(client->state != STATE_IN_LOBBY)
+    {
+        SSL_write(client->ssl,
+                  "ERROR|Not in lobby",
+                  18);
+        return;
+    }
+
+    int i;
+
+    for(i = 0; i < MAX_LOBBIES; i++)
+    {
+        if(lobbies[i].id ==
+           client->lobby_id)
+        {
+            lobbies[i].player_count--;
+
+            if(lobbies[i].player_count <= 0)
+            {
+                lobbies[i].active = 0;
+
+                printf(
+                    "[LOBBY] Lobby %s removed\n",
+                    lobbies[i].name);
+            }
+
+            break;
+        }
+    }
+
+    client->lobby_id = -1;
+
+    client->state =
+        STATE_AUTHENTICATED;
+
+    SSL_write(client->ssl,
+              "LEAVE_OK",
+              8);
 }
 
 /* -------------------------------------------------- */
@@ -289,6 +507,18 @@ DWORD WINAPI client_thread(LPVOID arg)
                 handle_login(client, buffer);
                 break;
 
+            case MSG_CREATE_LOBBY:
+                handle_create_lobby(client, buffer);
+                break;
+
+            case MSG_JOIN:
+                handle_join(client, buffer);
+                break;
+
+            case MSG_LEAVE:
+                handle_leave(client);
+                break;
+
             default:
                 SSL_write(
                     client->ssl,
@@ -345,6 +575,10 @@ int main(int argc, char *argv[])
     InitializeCriticalSection(&clients_mutex);
 
     memset(clients, 0, sizeof(clients));
+
+    InitializeCriticalSection(&lobbies_mutex);
+
+    memset(lobbies, 0, sizeof(lobbies));
 
     if (WSAStartup(
             MAKEWORD(2, 2),
@@ -486,6 +720,9 @@ int main(int argc, char *argv[])
 
     DeleteCriticalSection(
         &clients_mutex);
+
+    DeleteCriticalSection(
+        &lobbies_mutex);
 
     return EXIT_SUCCESS;
 }

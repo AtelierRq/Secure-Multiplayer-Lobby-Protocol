@@ -101,7 +101,7 @@ void show_server_certificate(SSL *ssl)
 /* LOGIN                                              */
 /* -------------------------------------------------- */
 
-void perform_login(SSL *ssl)
+int perform_login(SSL *ssl)
 {
     char nickname[MAX_NICK_LEN];
 
@@ -109,59 +109,66 @@ void perform_login(SSL *ssl)
 
     char response[MAX_MSG_LEN];
 
-    printf(
-        "Nickname: ");
+    while(1)
+    {
+        printf("Nickname: ");
 
-    fgets(
-        nickname,
-        sizeof(nickname),
-        stdin);
+        if(fgets(nickname,
+                 sizeof(nickname),
+                 stdin) == NULL)
+        {
+            return 0;
+        }
 
-    nickname[strcspn(
-                 nickname,
-                 "\r\n")] = '\0';
+        nickname[strcspn(
+            nickname,
+            "\r\n")] = '\0';
 
-    snprintf(
-        message,
-        sizeof(message),
-        "LOGIN|%s",
-        nickname);
+        snprintf(
+            message,
+            sizeof(message),
+            "LOGIN|%s",
+            nickname);
 
-    SSL_write(
-        ssl,
-        message,
-        (int)strlen(message));
-
-    memset(
-        response,
-        0,
-        sizeof(response));
-
-    int bytes =
-        SSL_read(
+        SSL_write(
             ssl,
+            message,
+            (int)strlen(message));
+
+        memset(
             response,
-            sizeof(response) - 1);
+            0,
+            sizeof(response));
 
-    if (bytes <= 0)
-    {
+        int bytes =
+            SSL_read(
+                ssl,
+                response,
+                sizeof(response) - 1);
+
+        if(bytes <= 0)
+        {
+            printf("Connection lost\n");
+            return 0;
+        }
+
+        response[bytes] = '\0';
+
         printf(
-            "Connection lost\n");
+            "\n[SMLP] Server response:\n%s\n",
+            response);
 
-        return;
-    }
+        if(get_message_type(response)
+           == MSG_LOGIN_OK)
+        {
+            printf(
+                "\n[SMLP] Login successful\n\n");
 
-    response[bytes] = '\0';
+            return 1;
+        }
 
-    printf(
-        "\n[SMLP] Server response:\n%s\n",
-        response);
-
-    if (get_message_type(response)
-        == MSG_LOGIN_OK)
-    {
         printf(
-            "\n[SMLP] Login successful\n");
+            "\nNickname is unavailable. Try again.\n\n");
     }
 }
 
@@ -301,12 +308,62 @@ int main(int argc, char *argv[])
 
     show_server_certificate(ssl);
 
-    perform_login(ssl);
+    if(!perform_login(ssl))
+    {
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+        closesocket(sockfd);
 
-    printf(
-        "\nPress ENTER to disconnect...");
+        SSL_CTX_free(ctx);
 
-    getchar();
+        WSACleanup();
+
+        return EXIT_FAILURE;
+    }
+
+    char command[MAX_MSG_LEN];
+
+    while (1)
+    {
+        printf("\nSMLP> ");
+
+        if (fgets(command,
+                sizeof(command),
+                stdin) == NULL)
+        {
+            break;
+        }
+
+        command[strcspn(command, "\r\n")] = '\0';
+
+        if (strcmp(command, "exit") == 0)
+        {
+            break;
+        }
+
+        SSL_write(
+            ssl,
+            command,
+            (int)strlen(command));
+
+        char response[MAX_MSG_LEN];
+
+        int bytes =
+            SSL_read(
+                ssl,
+                response,
+                sizeof(response) - 1);
+
+        if (bytes <= 0)
+        {
+            printf("Connection lost\n");
+            break;
+        }
+
+        response[bytes] = '\0';
+
+        printf("SERVER: %s\n", response);
+    }
 
     SSL_shutdown(ssl);
 

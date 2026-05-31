@@ -21,11 +21,15 @@ typedef enum
 {
     MSG_LOGIN,
     MSG_LOGIN_OK,
-    MSG_ERROR,
 
     MSG_CREATE_LOBBY,
+    MSG_LOBBY_CREATED,
+
     MSG_JOIN,
+    MSG_JOIN_OK,
+
     MSG_LEAVE,
+    MSG_LEAVE_OK,
 
     MSG_CHAT,
 
@@ -37,7 +41,10 @@ typedef enum
 
     MSG_BYE,
 
+    MSG_ERROR,
+
     MSG_UNKNOWN
+
 } MessageType;
 
 MessageType get_message_type(const char *msg);

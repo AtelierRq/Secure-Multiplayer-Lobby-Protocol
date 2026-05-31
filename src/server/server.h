@@ -8,6 +8,7 @@
 #include <openssl/err.h>
 
 #include "../common/protocol.h"
+#include "lobby.h"
 
 typedef struct
 {
@@ -30,6 +31,10 @@ typedef struct
 extern Client clients[MAX_CLIENTS];
 
 extern CRITICAL_SECTION clients_mutex;
+
+extern Lobby lobbies[MAX_LOBBIES];
+
+extern CRITICAL_SECTION lobbies_mutex;
 
 DWORD WINAPI client_thread(LPVOID arg);
 
