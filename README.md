@@ -32,6 +32,10 @@ Klient opuszcza lobby: LEAVE
 
 WYświetlanie listy pokoi: LIST_LOBBIES
 
-Wyświetlanie listy graczy: LIST_PlAYERS
+Wyświetlanie listy graczy: LIST_PLAYERS
+
+Zaczynanie rozgrywki: READY, START (HOST)
+
+Zakończenie rozgrywki: END_GAME (HOST)
 
 ---------------------------------------------------------------------------------------------------

@@ -171,6 +171,8 @@ void generate_token(char *buffer,
 
 void handle_login(Client *client, char *message)
 {
+    client->ready = 0;
+
     char nickname[MAX_NICK_LEN];
 
     memset(nickname, 0, sizeof(nickname));
@@ -305,6 +307,8 @@ int find_lobby(const char *name)
 
 void handle_create_lobby(Client *client, char *message)
 {
+    client->ready = 0;
+
     char lobby_name[MAX_LOBBY_NAME];
 
     if(client->state == STATE_IN_LOBBY)
@@ -383,6 +387,8 @@ void handle_create_lobby(Client *client, char *message)
 
 void handle_join(Client *client, char *message)
 {
+    client->ready = 0;
+
     char lobby_name[MAX_LOBBY_NAME];
 
     if(client->state == STATE_IN_LOBBY)
@@ -561,6 +567,8 @@ void handle_list_players(Client *client)
 
 void handle_leave(Client *client)
 {
+    client->ready = 0;
+
     if(client->state != STATE_IN_LOBBY)
     {
         SSL_write(client->ssl,
@@ -614,6 +622,210 @@ void handle_leave(Client *client)
     SSL_write(client->ssl,
               "LEAVE_OK",
               8);
+}
+
+void handle_ready(Client *client)
+{
+
+    if(client->state != STATE_IN_LOBBY)
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Not in lobby",
+            18);
+
+        return;
+    }
+
+    client->ready = 1;
+
+    EnterCriticalSection(&clients_mutex);
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == client->id)
+        {
+            clients[i].ready = 1;
+            break;
+        }
+    }
+
+    LeaveCriticalSection(&clients_mutex);
+
+    SSL_write(
+        client->ssl,
+        "READY_OK",
+        8);
+
+    printf(
+        "[READY] %s is ready\n",
+        client->nickname);
+}
+
+int is_host(Client *client)
+{
+    for(int i = 0; i < MAX_LOBBIES; i++)
+    {
+        if(lobbies[i].id ==
+           client->lobby_id)
+        {
+            return
+                lobbies[i].host_id ==
+                client->id;
+        }
+    }
+
+    return 0;
+}
+
+int all_players_ready(int lobby_id)
+{
+    int players = 0;
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == 0)
+            continue;
+
+        if(clients[i].lobby_id != lobby_id)
+            continue;
+
+        players++;
+
+        if(clients[i].ready == 0)
+            return 0;
+    }
+
+    return players >= 2;
+}
+
+void handle_start(Client *client)
+{
+    EnterCriticalSection(&clients_mutex);
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == 0)
+            continue;
+
+        if(clients[i].lobby_id ==
+        client->lobby_id)
+        {
+            clients[i].state =
+                STATE_IN_GAME;
+        }
+    }
+
+    LeaveCriticalSection(&clients_mutex);
+
+    client->state = STATE_IN_GAME;
+
+    if(!is_host(client))
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Only host can start game",
+            31);
+
+        return;
+    }
+
+    if(!all_players_ready(
+            client->lobby_id))
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Not all players are ready",
+            32);
+
+        return;
+    }
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == 0)
+            continue;
+
+        if(clients[i].lobby_id ==
+        client->lobby_id)
+        {
+            SSL_write(
+                clients[i].ssl,
+                "GAME_STARTED",
+                12);
+        }
+    }
+
+    printf(
+        "[GAME] Lobby %d started\n",
+        client->lobby_id);
+}
+
+void handle_end_game(Client *client)
+{
+    if(!is_host(client))
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Only host can end game",
+            29);
+
+        return;
+    }
+
+    if(client->state !=
+       STATE_IN_GAME)
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Game not started",
+            22);
+
+        return;
+    }
+
+    EnterCriticalSection(&clients_mutex);
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == 0)
+            continue;
+
+        if(clients[i].lobby_id ==
+           client->lobby_id)
+        {
+            clients[i].state =
+                STATE_IN_LOBBY;
+
+            clients[i].ready = 0;
+        }
+    }
+
+    LeaveCriticalSection(&clients_mutex);
+
+    client->state =
+        STATE_IN_LOBBY;
+
+    client->ready = 0;
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == 0)
+            continue;
+
+        if(clients[i].lobby_id ==
+        client->lobby_id)
+        {
+            SSL_write(
+                clients[i].ssl,
+                "GAME_ENDED",
+                10);
+        }
+    }
+
+    printf(
+        "[GAME] Lobby %d ended\n",
+        client->lobby_id);
 }
 
 /* -------------------------------------------------- */
@@ -694,6 +906,18 @@ DWORD WINAPI client_thread(LPVOID arg)
 
             case MSG_LEAVE:
                 handle_leave(client);
+                break;
+
+            case MSG_READY:
+                handle_ready(client);
+                break;
+
+            case MSG_START:
+                handle_start(client);
+                break;
+
+            case MSG_END_GAME:
+                handle_end_game(client);
                 break;
 
             default:

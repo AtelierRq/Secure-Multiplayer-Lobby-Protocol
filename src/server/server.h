@@ -26,6 +26,8 @@ typedef struct
 
     int lobby_id;
 
+    int ready;
+
 } Client;
 
 extern Client clients[MAX_CLIENTS];

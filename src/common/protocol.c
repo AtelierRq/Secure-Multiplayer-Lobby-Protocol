@@ -46,11 +46,23 @@ MessageType get_message_type(const char *msg)
     if (strncmp(msg, "CHAT|", 5) == 0)
         return MSG_CHAT;
 
-    if (strncmp(msg, "READY", 5) == 0)
+    if(strcmp(msg, "READY") == 0)
         return MSG_READY;
 
-    if (strncmp(msg, "START", 5) == 0)
+    if(strcmp(msg, "READY_OK") == 0)
+        return MSG_READY_OK;
+
+    if(strcmp(msg, "START") == 0)
         return MSG_START;
+
+    if(strcmp(msg, "GAME_STARTED") == 0)
+        return MSG_GAME_STARTED;
+
+    if(strcmp(msg, "END_GAME") == 0)
+        return MSG_END_GAME;
+
+    if(strcmp(msg, "GAME_ENDED") == 0)
+        return MSG_GAME_ENDED;
 
     if (strncmp(msg, "PING", 4) == 0)
         return MSG_PING;
@@ -95,6 +107,12 @@ const char *message_type_to_string(MessageType type)
         case MSG_START:
             return "START";
 
+        case MSG_END_GAME:
+            return "END_GAME";
+
+        case MSG_GAME_ENDED:
+            return "GAME_ENDED";
+            
         case MSG_PING:
             return "PING";
 

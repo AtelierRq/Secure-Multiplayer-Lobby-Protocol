@@ -195,6 +195,10 @@ int main(int argc, char *argv[])
     char current_nickname[MAX_NICK_LEN] = "";
     char current_lobby[64] = "";
 
+    int in_game = 0;
+
+    int ready = 0;
+
     if (argc != 3)
     {
         printf(
@@ -328,7 +332,21 @@ int main(int argc, char *argv[])
 
     while (1)
     {
-        if(strlen(current_lobby) > 0)
+        if(in_game)
+        {
+            printf(
+                "\nSMLP[%s|%s|IN_GAME]> ",
+                current_nickname,
+                current_lobby);
+        }
+        else if(strlen(current_lobby) > 0 && ready)
+        {
+            printf(
+                "\nSMLP[%s|%s|READY]> ",
+                current_nickname,
+                current_lobby);
+        }
+        else if(strlen(current_lobby) > 0)
         {
             printf(
                 "\nSMLP[%s|%s]> ",
@@ -400,6 +418,26 @@ int main(int argc, char *argv[])
         if(strcmp(response, "LEAVE_OK") == 0)
         {
             current_lobby[0] = '\0';
+            ready = 0;
+            in_game = 0;
+        }
+
+        if(strcmp(response,
+          "READY_OK") == 0)
+        {
+            ready = 1;
+        }
+
+        if(strcmp(response, "GAME_STARTED") == 0)
+        {
+            in_game = 1;
+            ready = 0;
+        }
+
+        if(strcmp(response, "GAME_ENDED") == 0)
+        {
+            in_game = 0;
+            ready = 0;
         }
 
         printf("SERVER: %s\n", response);

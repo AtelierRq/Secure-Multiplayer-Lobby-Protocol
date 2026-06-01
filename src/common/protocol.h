@@ -40,7 +40,13 @@ typedef enum
     MSG_CHAT,
 
     MSG_READY,
+    MSG_READY_OK,
+
     MSG_START,
+    MSG_GAME_STARTED,
+
+    MSG_END_GAME,
+    MSG_GAME_ENDED,
 
     MSG_PING,
     MSG_PONG,
