@@ -828,6 +828,80 @@ void handle_end_game(Client *client)
         client->lobby_id);
 }
 
+void broadcast_to_lobby(int lobby_id, const char *message)
+{
+    EnterCriticalSection(
+        &clients_mutex);
+
+    for(int i = 0;
+        i < MAX_CLIENTS;
+        i++)
+    {
+        if(clients[i].id == 0)
+            continue;
+
+        if(clients[i].lobby_id !=
+           lobby_id)
+            continue;
+
+        SSL_write(
+            clients[i].ssl,
+            message,
+            (int)strlen(message));
+    }
+
+    LeaveCriticalSection(
+        &clients_mutex);
+}
+
+void handle_chat(Client *client, char *message)
+{
+    char *text;
+
+    char response[MAX_MSG_LEN];
+
+    if(client->lobby_id < 0)
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Not in lobby",
+            18);
+
+        return;
+    }
+
+    text =
+        strchr(message, '|');
+
+    if(text == NULL)
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Invalid chat",
+            18);
+
+        return;
+    }
+
+    text++;
+
+    snprintf(
+        response,
+        sizeof(response),
+        "CHAT_MSG|%s|%s",
+        client->nickname,
+        text);
+
+    broadcast_to_lobby(
+        client->lobby_id,
+        response);
+
+    printf(
+        "[CHAT][%s] %s\n",
+        client->nickname,
+        text);
+}
+
 /* -------------------------------------------------- */
 /* CLIENT THREAD                                      */
 /* -------------------------------------------------- */
@@ -918,6 +992,10 @@ DWORD WINAPI client_thread(LPVOID arg)
 
             case MSG_END_GAME:
                 handle_end_game(client);
+                break;
+
+            case MSG_CHAT:
+                handle_chat(client, buffer);
                 break;
 
             default:

@@ -46,6 +46,9 @@ MessageType get_message_type(const char *msg)
     if (strncmp(msg, "CHAT|", 5) == 0)
         return MSG_CHAT;
 
+    if(strncmp(msg, "CHAT_MSG|", 9) == 0)
+        return MSG_CHAT_BROADCAST;
+
     if(strcmp(msg, "READY") == 0)
         return MSG_READY;
 
@@ -112,7 +115,7 @@ const char *message_type_to_string(MessageType type)
 
         case MSG_GAME_ENDED:
             return "GAME_ENDED";
-            
+
         case MSG_PING:
             return "PING";
 

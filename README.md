@@ -38,4 +38,6 @@ Zaczynanie rozgrywki: READY, START (HOST)
 
 Zakończenie rozgrywki: END_GAME (HOST)
 
+Pisanie wiadomości globalnych: CHAT|Cześć
+
 ---------------------------------------------------------------------------------------------------

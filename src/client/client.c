@@ -440,6 +440,25 @@ int main(int argc, char *argv[])
             ready = 0;
         }
 
+        if(strncmp(response, "CHAT_MSG|", 9) == 0)
+        {
+            char sender[64];
+            char text[MAX_MSG_LEN];
+
+            sscanf(
+                response,
+                "CHAT_MSG|%63[^|]|%511[^\n]",
+                sender,
+                text);
+
+            printf(
+                "\n[%s]: %s\n",
+                sender,
+                text);
+
+            continue;
+        }
+
         printf("SERVER: %s\n", response);
     }
 

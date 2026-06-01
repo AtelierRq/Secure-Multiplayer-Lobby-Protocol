@@ -38,6 +38,7 @@ typedef enum
     MSG_LEAVE_OK,
 
     MSG_CHAT,
+    MSG_CHAT_BROADCAST,
 
     MSG_READY,
     MSG_READY_OK,
