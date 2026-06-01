@@ -488,6 +488,8 @@ void handle_list_lobbies(Client *client)
 
 void handle_list_players(Client *client)
 {
+    int host_id = -1;
+
     char response[MAX_MSG_LEN];
 
     strcpy(response, "PLAYERS|");
@@ -502,6 +504,18 @@ void handle_list_players(Client *client)
         return;
     }
 
+    for(int i = 0; i < MAX_LOBBIES; i++)
+    {
+        if(lobbies[i].id ==
+        client->lobby_id)
+        {
+            host_id =
+                lobbies[i].host_id;
+
+            break;
+        }
+    }
+
     EnterCriticalSection(&clients_mutex);
 
     for(int i = 0; i < MAX_CLIENTS; i++)
@@ -513,11 +527,28 @@ void handle_list_players(Client *client)
            client->lobby_id)
             continue;
 
-        strcat(response,
-               clients[i].nickname);
+        char temp[128];
+
+        if(clients[i].id ==
+        host_id)
+        {
+            snprintf(
+                temp,
+                sizeof(temp),
+                "%s[Host],",
+                clients[i].nickname);
+        }
+        else
+        {
+            snprintf(
+                temp,
+                sizeof(temp),
+                "%s,",
+                clients[i].nickname);
+        }
 
         strcat(response,
-               ",");
+            temp);
     }
 
     LeaveCriticalSection(&clients_mutex);
