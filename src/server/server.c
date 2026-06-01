@@ -565,6 +565,8 @@ void handle_list_players(Client *client)
         (int)strlen(response));
 }
 
+int is_host(Client *client);
+
 void handle_leave(Client *client)
 {
     client->ready = 0;
@@ -574,6 +576,50 @@ void handle_leave(Client *client)
         SSL_write(client->ssl,
                   "ERROR|Not in lobby",
                   18);
+        return;
+    }
+
+    if(is_host(client))
+    {
+        int lobby_id = client->lobby_id;
+
+        EnterCriticalSection(&clients_mutex);
+
+        for(int j = 0; j < MAX_CLIENTS; j++)
+        {
+            if(clients[j].id == 0)
+                continue;
+
+            if(clients[j].lobby_id != lobby_id)
+                continue;
+
+            clients[j].lobby_id = -1;
+            clients[j].ready = 0;
+            clients[j].state = STATE_AUTHENTICATED;
+
+            SSL_write(
+                clients[j].ssl,
+                "LEAVE_OK",
+                8);
+        }
+
+        LeaveCriticalSection(&clients_mutex);
+
+        for(int j = 0; j < MAX_LOBBIES; j++)
+        {
+            if(lobbies[j].id == lobby_id)
+            {
+                lobbies[j].player_count = 0;
+                lobbies[j].active = 0;
+
+                printf(
+                    "[LOBBY] Lobby %s removed by host\n",
+                    lobbies[j].name);
+
+                break;
+            }
+        }
+
         return;
     }
 
