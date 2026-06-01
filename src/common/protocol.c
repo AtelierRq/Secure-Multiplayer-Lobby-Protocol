@@ -25,6 +25,18 @@ MessageType get_message_type(const char *msg)
     if (strncmp(msg, "JOIN_OK|", 8) == 0)
         return MSG_JOIN_OK;
 
+    if (strcmp(msg, "LIST_LOBBIES") == 0)
+        return MSG_LIST_LOBBIES;
+
+    if (strncmp(msg, "LOBBIES|", 8) == 0)
+        return MSG_LOBBIES;
+
+    if (strcmp(msg, "LIST_PLAYERS") == 0)
+        return MSG_LIST_PLAYERS;
+
+    if (strncmp(msg, "PLAYERS|", 8) == 0)
+        return MSG_PLAYERS;
+
     if (strncmp(msg, "LEAVE", 5) == 0)
         return MSG_LEAVE;
 

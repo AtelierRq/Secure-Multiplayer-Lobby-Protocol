@@ -28,6 +28,12 @@ typedef enum
     MSG_JOIN,
     MSG_JOIN_OK,
 
+    MSG_LIST_LOBBIES,
+    MSG_LOBBIES,
+
+    MSG_LIST_PLAYERS,
+    MSG_PLAYERS,
+
     MSG_LEAVE,
     MSG_LEAVE_OK,
 

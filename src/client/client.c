@@ -101,7 +101,7 @@ void show_server_certificate(SSL *ssl)
 /* LOGIN                                              */
 /* -------------------------------------------------- */
 
-int perform_login(SSL *ssl)
+int perform_login(SSL *ssl, char *current_nickname)
 {
     char nickname[MAX_NICK_LEN];
 
@@ -158,12 +158,12 @@ int perform_login(SSL *ssl)
             "\n[SMLP] Server response:\n%s\n",
             response);
 
-        if(get_message_type(response)
-           == MSG_LOGIN_OK)
+        if(get_message_type(response) == MSG_LOGIN_OK)
         {
+            strcpy(current_nickname, nickname);
+
             printf(
                 "\n[SMLP] Login successful\n\n");
-
             return 1;
         }
 
@@ -191,6 +191,9 @@ int main(int argc, char *argv[])
     const char *ip;
 
     int port;
+
+    char current_nickname[MAX_NICK_LEN] = "";
+    char current_lobby[64] = "";
 
     if (argc != 3)
     {
@@ -308,7 +311,7 @@ int main(int argc, char *argv[])
 
     show_server_certificate(ssl);
 
-    if(!perform_login(ssl))
+    if(!perform_login(ssl, current_nickname))
     {
         SSL_shutdown(ssl);
         SSL_free(ssl);
@@ -325,7 +328,19 @@ int main(int argc, char *argv[])
 
     while (1)
     {
-        printf("\nSMLP> ");
+        if(strlen(current_lobby) > 0)
+        {
+            printf(
+                "\nSMLP[%s|%s]> ",
+                current_nickname,
+                current_lobby);
+        }
+        else
+        {
+            printf(
+                "\nSMLP[%s]> ",
+                current_nickname);
+        }
 
         if (fgets(command,
                 sizeof(command),
@@ -361,6 +376,31 @@ int main(int argc, char *argv[])
         }
 
         response[bytes] = '\0';
+
+        if(strncmp(response, "JOIN_OK|", 8) == 0)
+        {
+            strcpy(
+                current_lobby,
+                response + 8);
+        }
+
+        if(strncmp(response, "LOBBY_CREATED|", 14) == 0)
+        {
+            char *last_pipe =
+                strrchr(response, '|');
+
+            if(last_pipe != NULL)
+            {
+                strcpy(
+                    current_lobby,
+                    last_pipe + 1);
+            }
+        }
+
+        if(strcmp(response, "LEAVE_OK") == 0)
+        {
+            current_lobby[0] = '\0';
+        }
 
         printf("SERVER: %s\n", response);
     }

@@ -307,6 +307,16 @@ void handle_create_lobby(Client *client, char *message)
 {
     char lobby_name[MAX_LOBBY_NAME];
 
+    if(client->state == STATE_IN_LOBBY)
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Already in lobby",
+            22);
+
+        return;
+    }
+
     if(sscanf(message,
               "CREATE_LOBBY|%63s",
               lobby_name) != 1)
@@ -340,12 +350,27 @@ void handle_create_lobby(Client *client, char *message)
     client->lobby_id = lobby_id;
     client->state = STATE_IN_LOBBY;
 
+    EnterCriticalSection(&clients_mutex);
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == client->id)
+        {
+            clients[i].lobby_id = lobby_id;
+            clients[i].state = STATE_IN_LOBBY;
+            break;
+        }
+    }
+
+    LeaveCriticalSection(&clients_mutex);
+
     char response[MAX_MSG_LEN];
 
     snprintf(response,
-             sizeof(response),
-             "LOBBY_CREATED|%d",
-             lobby_id);
+         sizeof(response),
+         "LOBBY_CREATED|%d|%s",
+         lobby_id,
+         lobby_name);
 
     SSL_write(client->ssl,
               response,
@@ -356,10 +381,19 @@ void handle_create_lobby(Client *client, char *message)
            lobby_name);
 }
 
-void handle_join(Client *client,
-                 char *message)
+void handle_join(Client *client, char *message)
 {
     char lobby_name[MAX_LOBBY_NAME];
+
+    if(client->state == STATE_IN_LOBBY)
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Already in lobby",
+            22);
+
+        return;
+    }
 
     if(sscanf(message,
               "JOIN|%63s",
@@ -383,11 +417,26 @@ void handle_join(Client *client,
 
     lobbies[idx].player_count++;
 
-    client->lobby_id =
-        lobbies[idx].id;
+    client->lobby_id = lobbies[idx].id;
+    client->state = STATE_IN_LOBBY;
 
-    client->state =
-        STATE_IN_LOBBY;
+    EnterCriticalSection(&clients_mutex);
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == client->id)
+        {
+            clients[i].lobby_id =
+                lobbies[idx].id;
+
+            clients[i].state =
+                STATE_IN_LOBBY;
+
+            break;
+        }
+    }
+
+    LeaveCriticalSection(&clients_mutex);
 
     char response[MAX_MSG_LEN];
 
@@ -403,6 +452,80 @@ void handle_join(Client *client,
     printf("[LOBBY] %s joined %s\n",
            client->nickname,
            lobby_name);
+}
+
+void handle_list_lobbies(Client *client)
+{
+    char response[MAX_MSG_LEN];
+
+    strcpy(response, "LOBBIES|");
+
+    EnterCriticalSection(&lobbies_mutex);
+
+    for(int i = 0; i < MAX_LOBBIES; i++)
+    {
+        if(!lobbies[i].active)
+            continue;
+
+        char temp[128];
+
+        snprintf(temp,
+                 sizeof(temp),
+                 "%s(%d),",
+                 lobbies[i].name,
+                 lobbies[i].player_count);
+
+        strcat(response, temp);
+    }
+
+    LeaveCriticalSection(&lobbies_mutex);
+
+    SSL_write(
+        client->ssl,
+        response,
+        (int)strlen(response));
+}
+
+void handle_list_players(Client *client)
+{
+    char response[MAX_MSG_LEN];
+
+    strcpy(response, "PLAYERS|");
+
+    if(client->lobby_id < 0)
+    {
+        SSL_write(
+            client->ssl,
+            "ERROR|Not in lobby",
+            18);
+
+        return;
+    }
+
+    EnterCriticalSection(&clients_mutex);
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == 0)
+            continue;
+
+        if(clients[i].lobby_id !=
+           client->lobby_id)
+            continue;
+
+        strcat(response,
+               clients[i].nickname);
+
+        strcat(response,
+               ",");
+    }
+
+    LeaveCriticalSection(&clients_mutex);
+
+    SSL_write(
+        client->ssl,
+        response,
+        (int)strlen(response));
 }
 
 void handle_leave(Client *client)
@@ -438,9 +561,24 @@ void handle_leave(Client *client)
     }
 
     client->lobby_id = -1;
+    client->state = STATE_AUTHENTICATED;
 
-    client->state =
-        STATE_AUTHENTICATED;
+    EnterCriticalSection(&clients_mutex);
+
+    for(int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if(clients[i].id == client->id)
+        {
+            clients[i].lobby_id = -1;
+
+            clients[i].state =
+                STATE_AUTHENTICATED;
+
+            break;
+        }
+    }
+
+    LeaveCriticalSection(&clients_mutex);
 
     SSL_write(client->ssl,
               "LEAVE_OK",
@@ -509,6 +647,14 @@ DWORD WINAPI client_thread(LPVOID arg)
 
             case MSG_CREATE_LOBBY:
                 handle_create_lobby(client, buffer);
+                break;
+
+            case MSG_LIST_LOBBIES:
+                handle_list_lobbies(client);
+                break;
+
+            case MSG_LIST_PLAYERS:
+                handle_list_players(client);
                 break;
 
             case MSG_JOIN:
