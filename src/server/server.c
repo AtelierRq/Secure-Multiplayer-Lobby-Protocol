@@ -75,6 +75,33 @@ void configure_server_context(SSL_CTX *ctx)
 /* -------------------------------------------------- */
 /* CLIENT MANAGEMENT                                  */
 /* -------------------------------------------------- */
+void write_log(const char *message)
+{
+    FILE *f =
+        fopen("logs/server.log", "a");
+
+    if(f == NULL)
+        return;
+
+    time_t now =
+        time(NULL);
+
+    struct tm *tm_info =
+        localtime(&now);
+
+    fprintf(
+        f,
+        "[%04d-%02d-%02d %02d:%02d:%02d] %s\n",
+        tm_info->tm_year + 1900,
+        tm_info->tm_mon + 1,
+        tm_info->tm_mday,
+        tm_info->tm_hour,
+        tm_info->tm_min,
+        tm_info->tm_sec,
+        message);
+
+    fclose(f);
+}
 
 int nickname_exists(const char *nickname)
 {
@@ -272,6 +299,16 @@ void handle_login(Client *client, char *message)
 
     char response[MAX_MSG_LEN];
 
+    char log_msg[256];
+
+    snprintf(
+        log_msg,
+        sizeof(log_msg),
+        "LOGIN: %s",
+        client->nickname);
+
+    write_log(log_msg);
+
     snprintf(
         response,
         sizeof(response),
@@ -412,6 +449,17 @@ void handle_create_lobby(Client *client, char *message)
     printf("[LOBBY] %s created lobby %s\n",
            client->nickname,
            lobby_name);
+
+    char log_msg[256];
+
+    snprintf(
+        log_msg,
+        sizeof(log_msg),
+        "LOBBY_CREATED: %s by %s",
+        lobby_name,
+        client->nickname);
+
+    write_log(log_msg);
 }
 
 void handle_join(Client *client, char *message)
@@ -487,6 +535,18 @@ void handle_join(Client *client, char *message)
     printf("[LOBBY] %s joined %s\n",
            client->nickname,
            lobby_name);
+
+    char log_msg[256];
+
+    snprintf(
+        log_msg,
+        sizeof(log_msg),
+        "JOIN: %s -> %s",
+        client->nickname,
+        lobby_name);
+
+    write_log(log_msg);
+
 }
 
 void handle_list_lobbies(Client *client)
@@ -652,6 +712,16 @@ void handle_leave(Client *client)
         return;
     }
 
+    char log_msg[256];
+
+    snprintf(
+        log_msg,
+        sizeof(log_msg),
+        "LEAVE: %s",
+        client->nickname);
+
+    write_log(log_msg);
+
     int i;
 
     for(i = 0; i < MAX_LOBBIES; i++)
@@ -694,9 +764,17 @@ void handle_leave(Client *client)
 
     LeaveCriticalSection(&clients_mutex);
 
-    SSL_write(client->ssl,
-              "LEAVE_OK",
-              8);
+    SSL_write(client->ssl, "LEAVE_OK", 8);
+    
+    char log_msg[256];
+
+    snprintf(
+        log_msg,
+        sizeof(log_msg),
+        "LEAVE: %s",
+        client->nickname);
+
+    write_log(log_msg);
 }
 
 void handle_ready(Client *client)
@@ -713,6 +791,16 @@ void handle_ready(Client *client)
     }
 
     client->ready = 1;
+
+    char log_msg[256];
+
+    snprintf(
+        log_msg,
+        sizeof(log_msg),
+        "READY: %s",
+        client->nickname);
+
+    write_log(log_msg);
 
     EnterCriticalSection(&clients_mutex);
 
@@ -829,6 +917,16 @@ void handle_start(Client *client)
                 "GAME_STARTED",
                 12);
         }
+
+        char log_msg[256];
+
+        snprintf(
+            log_msg,
+            sizeof(log_msg),
+            "GAME_STARTED by %s",
+            client->nickname);
+
+        write_log(log_msg);
     }
 
     printf(
@@ -896,6 +994,16 @@ void handle_end_game(Client *client)
                 "GAME_ENDED",
                 10);
         }
+
+        char log_msg[256];
+
+        snprintf(
+            log_msg,
+            sizeof(log_msg),
+            "GAME_ENDED by %s",
+            client->nickname);
+
+        write_log(log_msg);
     }
 
     printf(
@@ -975,6 +1083,17 @@ void handle_chat(Client *client, char *message)
         "[CHAT][%s] %s\n",
         client->nickname,
         text);
+
+    char log_msg[512];
+
+    snprintf(
+        log_msg,
+        sizeof(log_msg),
+        "CHAT: %s -> %s",
+        client->nickname,
+        text);
+
+    write_log(log_msg);
 }
 
 /* -------------------------------------------------- */
@@ -1099,9 +1218,17 @@ DWORD WINAPI client_thread(LPVOID arg)
         }
     }
 
-    printf(
-        "[INFO] Client disconnected (id=%d)\n",
-        client->id);
+    printf("[INFO] Client disconnected (id=%d)\n", client->id);
+
+    char log_msg[256];
+
+    snprintf(
+        log_msg,
+        sizeof(log_msg),
+        "DISCONNECT: %s",
+        client->nickname);
+
+    write_log(log_msg);
 
     SSL_shutdown(client->ssl);
 
@@ -1151,6 +1278,16 @@ DWORD WINAPI timeout_thread(LPVOID arg)
                 shutdown(
                     clients[i].socket_fd,
                     SD_BOTH);
+
+                char log_msg[256];
+
+                snprintf(
+                    log_msg,
+                    sizeof(log_msg),
+                    "TIMEOUT: %s",
+                    clients[i].nickname);
+
+                write_log(log_msg);
             }
         }
 
