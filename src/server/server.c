@@ -12,6 +12,8 @@
 
 #include "server.h"
 
+#include <time.h>
+
 // #pragma comment(lib, "ws2_32.lib")
 
 Client clients[MAX_CLIENTS];
@@ -107,6 +109,33 @@ void remove_client(int id)
     {
         if (clients[i].id == id)
         {
+            int lobby_id = clients[i].lobby_id;
+
+            if(lobby_id != -1)
+            {
+                for(int j = 0;
+                    j < MAX_LOBBIES;
+                    j++)
+                {
+                    if(lobbies[j].id ==
+                    lobby_id)
+                    {
+                        lobbies[j].player_count--;
+
+                        if(lobbies[j].player_count <= 0)
+                        {
+                            lobbies[j].active = 0;
+
+                            printf(
+                                "[LOBBY] Lobby %s removed\n",
+                                lobbies[j].name);
+                        }
+
+                        break;
+                    }
+                }
+            }
+
             clients[i].id = 0;
 
             memset(clients[i].nickname, 0,
@@ -997,6 +1026,23 @@ DWORD WINAPI client_thread(LPVOID arg)
 
         buffer[bytes] = '\0';
 
+        client->last_activity = time(NULL);
+
+        EnterCriticalSection(&clients_mutex);
+
+        for(int i = 0; i < MAX_CLIENTS; i++)
+        {
+            if(clients[i].id == client->id)
+            {
+                clients[i].last_activity =
+                    client->last_activity;
+
+                break;
+            }
+        }
+
+        LeaveCriticalSection(&clients_mutex);
+
         printf(
             "[RECV][%d] %s\n",
             client->id,
@@ -1066,6 +1112,51 @@ DWORD WINAPI client_thread(LPVOID arg)
     remove_client(client->id);
 
     free(client);
+
+    return 0;
+}
+
+DWORD WINAPI timeout_thread(LPVOID arg)
+{
+    (void)arg;
+
+    while(1)
+    {
+        Sleep(10000);
+
+        time_t now =
+            time(NULL);
+
+        EnterCriticalSection(
+            &clients_mutex);
+
+        for(int i = 0;
+            i < MAX_CLIENTS;
+            i++)
+        {
+            if(clients[i].id == 0)
+                continue;
+
+            double diff =
+                difftime(
+                    now,
+                    clients[i].last_activity);
+
+            if(diff > 120)
+            {
+                printf(
+                    "[TIMEOUT] %s disconnected\n",
+                    clients[i].nickname);
+
+                shutdown(
+                    clients[i].socket_fd,
+                    SD_BOTH);
+            }
+        }
+
+        LeaveCriticalSection(
+            &clients_mutex);
+    }
 
     return 0;
 }
@@ -1173,6 +1264,8 @@ int main(int argc, char *argv[])
         "[SMLP] Server listening on port %d\n",
         port);
 
+    CreateThread(NULL, 0, timeout_thread, NULL, 0, NULL);
+
     while (1)
     {
         SOCKET client_socket;
@@ -1204,6 +1297,8 @@ int main(int argc, char *argv[])
 
         client->id =
             next_client_id++;
+
+        client->last_activity = time(NULL);
 
         client->socket_fd =
             client_socket;

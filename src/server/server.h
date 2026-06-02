@@ -28,6 +28,8 @@ typedef struct
 
     int ready;
 
+    time_t last_activity;
+
 } Client;
 
 extern Client clients[MAX_CLIENTS];

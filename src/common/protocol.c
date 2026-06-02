@@ -67,12 +67,6 @@ MessageType get_message_type(const char *msg)
     if(strcmp(msg, "GAME_ENDED") == 0)
         return MSG_GAME_ENDED;
 
-    if (strncmp(msg, "PING", 4) == 0)
-        return MSG_PING;
-
-    if (strncmp(msg, "PONG", 4) == 0)
-        return MSG_PONG;
-
     if (strncmp(msg, "BYE", 3) == 0)
         return MSG_BYE;
 
@@ -115,12 +109,6 @@ const char *message_type_to_string(MessageType type)
 
         case MSG_GAME_ENDED:
             return "GAME_ENDED";
-
-        case MSG_PING:
-            return "PING";
-
-        case MSG_PONG:
-            return "PONG";
 
         case MSG_BYE:
             return "BYE";

@@ -50,9 +50,6 @@ typedef enum
     MSG_END_GAME,
     MSG_GAME_ENDED,
 
-    MSG_PING,
-    MSG_PONG,
-
     MSG_BYE,
 
     MSG_ERROR,
