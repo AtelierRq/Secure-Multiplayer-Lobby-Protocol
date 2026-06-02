@@ -10,6 +10,18 @@
 
 #include "../common/protocol.h"
 
+SSL *g_ssl = NULL;
+
+char g_nickname[MAX_NICK_LEN] = "";
+
+char g_lobby[MAX_LOBBY_NAME] = "";
+
+int g_ready = 0;
+
+int g_in_game = 0;
+
+volatile int g_running = 1;
+
 // #pragma comment(lib, "ws2_32.lib")
 
 /* -------------------------------------------------- */
@@ -172,6 +184,151 @@ int perform_login(SSL *ssl, char *current_nickname)
     }
 }
 
+void print_prompt(void)
+{
+    if(g_in_game)
+    {
+        printf(
+            "\nSMLP[%s|%s|IN_GAME]> ",
+            g_nickname,
+            g_lobby);
+    }
+    else if(strlen(g_lobby) > 0 &&
+            g_ready)
+    {
+        printf(
+            "\nSMLP[%s|%s|READY]> ",
+            g_nickname,
+            g_lobby);
+    }
+    else if(strlen(g_lobby) > 0)
+    {
+        printf(
+            "\nSMLP[%s|%s]> ",
+            g_nickname,
+            g_lobby);
+    }
+    else
+    {
+        printf(
+            "\nSMLP[%s]> ",
+            g_nickname);
+    }
+
+    fflush(stdout);
+}
+
+DWORD WINAPI receiver_thread(LPVOID arg)
+{
+    (void)arg;
+
+    char response[MAX_MSG_LEN];
+
+    while(g_running)
+    {
+        int bytes =
+            SSL_read(
+                g_ssl,
+                response,
+                sizeof(response)-1);
+
+        if(bytes <= 0)
+        {
+            printf(
+                "\nConnection lost\n");
+
+            g_running = 0;
+
+            break;
+        }
+
+        response[bytes] = '\0';
+
+        if(strncmp(response,
+                   "JOIN_OK|",
+                   8) == 0)
+        {
+            strcpy(
+                g_lobby,
+                response + 8);
+        }
+
+        if(strncmp(response,
+                   "LOBBY_CREATED|",
+                   14) == 0)
+        {
+            char *last_pipe =
+                strrchr(response,'|');
+
+            if(last_pipe)
+            {
+                strcpy(
+                    g_lobby,
+                    last_pipe + 1);
+            }
+        }
+
+        if(strcmp(response,
+                  "LEAVE_OK") == 0)
+        {
+            g_lobby[0] = '\0';
+            g_ready = 0;
+            g_in_game = 0;
+        }
+
+        if(strcmp(response,
+                  "READY_OK") == 0)
+        {
+            g_ready = 1;
+        }
+
+        if(strcmp(response,
+                  "GAME_STARTED") == 0)
+        {
+            g_in_game = 1;
+            g_ready = 0;
+        }
+
+        if(strcmp(response,
+                  "GAME_ENDED") == 0)
+        {
+            g_in_game = 0;
+            g_ready = 0;
+        }
+
+        if(strncmp(response,
+                   "CHAT_MSG|",
+                   9) == 0)
+        {
+            char sender[64];
+            char text[MAX_MSG_LEN];
+
+            sscanf(
+                response,
+                "CHAT_MSG|%63[^|]|%511[^\n]",
+                sender,
+                text);
+
+            printf(
+                "\n[%s]: %s\n",
+                sender,
+                text);
+
+            print_prompt();
+
+            continue;
+        }
+
+        printf(
+            "\nSERVER: %s\n",
+            response);
+
+        print_prompt();
+    }
+
+    return 0;
+}
+
 /* -------------------------------------------------- */
 /* MAIN                                               */
 /* -------------------------------------------------- */
@@ -193,11 +350,6 @@ int main(int argc, char *argv[])
     int port;
 
     char current_nickname[MAX_NICK_LEN] = "";
-    char current_lobby[64] = "";
-
-    int in_game = 0;
-
-    int ready = 0;
 
     if (argc != 3)
     {
@@ -328,48 +480,40 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    strcpy(g_nickname, current_nickname);
+
+    g_ssl = ssl;
+
+    HANDLE recv_thread =
+    CreateThread(
+        NULL,
+        0,
+        receiver_thread,
+        NULL,
+        0,
+        NULL);
+    
     char command[MAX_MSG_LEN];
 
-    while (1)
+    while(g_running)
     {
-        if(in_game)
-        {
-            printf(
-                "\nSMLP[%s|%s|IN_GAME]> ",
-                current_nickname,
-                current_lobby);
-        }
-        else if(strlen(current_lobby) > 0 && ready)
-        {
-            printf(
-                "\nSMLP[%s|%s|READY]> ",
-                current_nickname,
-                current_lobby);
-        }
-        else if(strlen(current_lobby) > 0)
-        {
-            printf(
-                "\nSMLP[%s|%s]> ",
-                current_nickname,
-                current_lobby);
-        }
-        else
-        {
-            printf(
-                "\nSMLP[%s]> ",
-                current_nickname);
-        }
+        print_prompt();
 
-        if (fgets(command,
+        if(fgets(
+                command,
                 sizeof(command),
                 stdin) == NULL)
         {
             break;
         }
 
-        command[strcspn(command, "\r\n")] = '\0';
+        command[strcspn(
+            command,
+            "\r\n")] = '\0';
 
-        if (strcmp(command, "exit") == 0)
+        if(strcmp(
+                command,
+                "exit") == 0)
         {
             break;
         }
@@ -378,90 +522,14 @@ int main(int argc, char *argv[])
             ssl,
             command,
             (int)strlen(command));
-
-        char response[MAX_MSG_LEN];
-
-        int bytes =
-            SSL_read(
-                ssl,
-                response,
-                sizeof(response) - 1);
-
-        if (bytes <= 0)
-        {
-            printf("Connection lost\n");
-            break;
-        }
-
-        response[bytes] = '\0';
-
-        if(strncmp(response, "JOIN_OK|", 8) == 0)
-        {
-            strcpy(
-                current_lobby,
-                response + 8);
-        }
-
-        if(strncmp(response, "LOBBY_CREATED|", 14) == 0)
-        {
-            char *last_pipe =
-                strrchr(response, '|');
-
-            if(last_pipe != NULL)
-            {
-                strcpy(
-                    current_lobby,
-                    last_pipe + 1);
-            }
-        }
-
-        if(strcmp(response, "LEAVE_OK") == 0)
-        {
-            current_lobby[0] = '\0';
-            ready = 0;
-            in_game = 0;
-        }
-
-        if(strcmp(response,
-          "READY_OK") == 0)
-        {
-            ready = 1;
-        }
-
-        if(strcmp(response, "GAME_STARTED") == 0)
-        {
-            in_game = 1;
-            ready = 0;
-        }
-
-        if(strcmp(response, "GAME_ENDED") == 0)
-        {
-            in_game = 0;
-            ready = 0;
-        }
-
-        if(strncmp(response, "CHAT_MSG|", 9) == 0)
-        {
-            char sender[64];
-            char text[MAX_MSG_LEN];
-
-            sscanf(
-                response,
-                "CHAT_MSG|%63[^|]|%511[^\n]",
-                sender,
-                text);
-
-            printf(
-                "\n[%s]: %s\n",
-                sender,
-                text);
-
-            continue;
-        }
-
-        printf("SERVER: %s\n", response);
     }
 
+    g_running = 0;
+
+    WaitForSingleObject(recv_thread, INFINITE);
+
+    CloseHandle(recv_thread);
+        
     SSL_shutdown(ssl);
 
     SSL_free(ssl);

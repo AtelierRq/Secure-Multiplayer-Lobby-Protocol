@@ -7,6 +7,7 @@
 
 #define MAX_CLIENTS 100
 #define MAX_LOBBIES 50
+#define MAX_LOBBY_NAME 64
 
 typedef enum
 {
