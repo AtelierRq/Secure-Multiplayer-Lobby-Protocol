@@ -1,43 +1,77 @@
-# Secure-Multiplayer-Lobby-Protocol
+# Uruchomienie serwera
 
+1. Przejdź do katalogu głównego projektu.
 
-Komenda do uruchomienia pliku generowania certyfikatów:
+2. Wygeneruj certyfikaty TLS:
 
+```powershell
 powershell -ExecutionPolicy Bypass -File .\generate_certs.ps1
+```
 
+3. Upewnij się, że wygenerowane certyfikaty znajdują się w katalogu:
 
-Kompilacja:
+```text
+certs/
+```
 
+4. Skompiluj projekt:
+
+```bash
 mingw32-make
+```
+
+5. Uruchom serwer:
+
+```bash
+bin\smlp_server.exe 1234
+```
+
+gdzie:
+
+* `1234` – numer portu nasłuchiwania.
+
+Po poprawnym uruchomieniu powinien pojawić się komunikat:
+
+```text
+[SMLP] Server listening on port 1234
+```
+
+---
+
+# Uruchomienie klienta
+
+Uruchom klienta podając adres serwera oraz numer portu:
+
+```bash
+bin\smlp_client.exe 127.0.0.1 1234
+```
+
+gdzie:
+
+* `127.0.0.1` – adres serwera,
+* `1234` – numer portu serwera.
+
+Po nawiązaniu połączenia klient poprosi o podanie nazwy użytkownika (nickname).
+
+---
+
+# Zakończenie działania klienta
+
+Aby zakończyć działanie klienta wpisz:
+
+```text
+exit
+```
+
+lub zamknij okno terminala.
+
+---
+
+# Zakończenie działania serwera
+
+Zamknięcie okna serwera powoduje zakończenie działania aplikacji oraz rozłączenie wszystkich podłączonych klientów.
 
 
----------------------------------------------------------------------------------------------------
-Terminal 1:
+---
 
-Uruchomienie serwera: bin\smlp_server.exe 1234 
----------------------------------------------------------------------------------------------------
-
----------------------------------------------------------------------------------------------------
-Terminal 2:
-
-Uruchomienie klienta: bin\smlp_client.exe 127.0.0.1 1234
-
-Klient podaje niezajęty nick.
-
-Klient tworzy lobby: CREATE_LOBBY|Room1
-
-Klient dołącza do lobby: JOIN|Room1
-
-Klient opuszcza lobby: LEAVE
-
-WYświetlanie listy pokoi: LIST_LOBBIES
-
-Wyświetlanie listy graczy: LIST_PLAYERS
-
-Zaczynanie rozgrywki: READY, START (HOST)
-
-Zakończenie rozgrywki: END_GAME (HOST)
-
-Pisanie wiadomości globalnych: CHAT|Cześć
-
----------------------------------------------------------------------------------------------------
+# Pełna lista komend znajduje się w /docs/Projekt 3 PUS Etap 3 Konrad Iwanczewski
