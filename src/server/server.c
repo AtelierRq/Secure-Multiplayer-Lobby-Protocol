@@ -765,8 +765,6 @@ void handle_leave(Client *client)
     LeaveCriticalSection(&clients_mutex);
 
     SSL_write(client->ssl, "LEAVE_OK", 8);
-    
-    char log_msg[256];
 
     snprintf(
         log_msg,
