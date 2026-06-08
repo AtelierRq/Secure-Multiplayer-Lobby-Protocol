@@ -74,4 +74,4 @@ Zamknięcie okna serwera powoduje zakończenie działania aplikacji oraz rozłą
 
 ---
 
-# Pełna lista komend znajduje się w /docs/Projekt 3 PUS Etap 3 Konrad Iwanczewski
+# Pełna lista komend znajduje się w /docs
